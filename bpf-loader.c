@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <string.h>
 #include <bpf/libbpf.h>
+#include <bpf/bpf.h>
 #include <sys/resource.h>
 #include <argp.h>
 

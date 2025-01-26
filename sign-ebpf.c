@@ -111,6 +111,5 @@ int BPF_PROG(bpf, int cmd, union bpf_attr *attr, unsigned int size)
     bpf_key_put(trusted_keyring);
 
 out:
-    set_if_not_errno_or_zero(ret, -EFAULT);
     return ret;
 }
