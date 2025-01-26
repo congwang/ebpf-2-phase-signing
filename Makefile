@@ -19,8 +19,11 @@ sign-ebpf.o: sign-ebpf.c vmlinux.h
 bpf-loader: bpf-loader.c
 	$(CC) $(CFLAGS) $< -o $@ -lbpf
 
+program-loader: program-loader.c
+	$(CC) $(CFLAGS) $< -o $@ -lbpf
+
 .PHONY: clean
 clean:
-	rm -f sign-ebpf.o bpf-loader vmlinux.h
+	rm -f sign-ebpf.o bpf-loader program-loader vmlinux.h
 
-all: sign-ebpf.o bpf-loader
+all: sign-ebpf.o bpf-loader program-loader
