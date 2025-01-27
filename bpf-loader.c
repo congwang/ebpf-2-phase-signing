@@ -97,6 +97,14 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    err = bpf_object__load(obj);
+    if (err) {
+        fprintf(stderr, "Failed to load BPF object: %d\n", err);
+        return 1;
+    }
+    if (arguments.verbose)
+        printf("BPF program are loaded successfully\n");
+
     // Pin all maps
     struct bpf_map *map;
 
@@ -106,7 +114,6 @@ int main(int argc, char **argv)
         err = 1;
         goto cleanup;
     }
-
     char pin_path[PATH_MAX];
     snprintf(pin_path, sizeof(pin_path), "%s/%s", PIN_BASEDIR, "original_program");
     if (bpf_map__pin(map, pin_path)) {
@@ -134,15 +141,6 @@ int main(int argc, char **argv)
 
     if (arguments.verbose)
         printf("Map 'modified_signature' pinned at %s\n", pin_path);
-
-    err = bpf_object__load(obj);
-    if (err) {
-        fprintf(stderr, "Failed to load BPF object: %d\n", err);
-        goto cleanup;
-    }
-
-    if (arguments.verbose)
-        printf("BPF program loaded and maps pinned successfully\n");
 
 cleanup:
     bpf_object__close(obj);
