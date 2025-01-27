@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <argp.h>
+#include <signal.h>
 
 #define PIN_BASEDIR "/sys/fs/bpf"
 
@@ -70,6 +71,13 @@ static int ensure_pin_dir(void)
     return 0;
 }
 
+static volatile bool running = true;
+
+static void sig_handler(int signo)
+{
+    running = false;
+}
+
 int main(int argc, char **argv)
 {
     struct arguments arguments = {
@@ -123,7 +131,7 @@ int main(int argc, char **argv)
     }
 
     if (arguments.verbose)
-        printf("Map 'original_program' pinned at %s\n", pin_path);
+        printf("Map 'original_program' pinned at %s\n", PIN_BASEDIR "/original_program");
 
     map = bpf_object__find_map_by_name(obj, "modified_signature");
     if (!map) {
@@ -140,9 +148,40 @@ int main(int argc, char **argv)
     }
 
     if (arguments.verbose)
-        printf("Map 'modified_signature' pinned at %s\n", pin_path);
+        printf("Map 'modified_signature' pinned at %s\n", PIN_BASEDIR "/modified_signature");
+
+    // Set up signal handler
+    signal(SIGINT, sig_handler);
+    signal(SIGTERM, sig_handler);
+
+    printf("Program loaded and running. Press Ctrl+C to exit...\n");
+
+    while (running) {
+        sleep(1);
+    }
+
+    printf("\nCleaning up...\n");
 
 cleanup:
+    // Unpin maps
+    if (obj) {
+        struct bpf_map *map;
+
+        map = bpf_object__find_map_by_name(obj, "original_program");
+        if (map) {
+            char pin_path[PATH_MAX];
+            snprintf(pin_path, sizeof(pin_path), "%s/%s", PIN_BASEDIR, "original_program");
+            bpf_map__unpin(map, pin_path);
+        }
+
+        map = bpf_object__find_map_by_name(obj, "modified_signature");
+        if (map) {
+            char pin_path[PATH_MAX];
+            snprintf(pin_path, sizeof(pin_path), "%s/%s", PIN_BASEDIR, "modified_signature");
+            bpf_map__unpin(map, pin_path);
+        }
+    }
+
     bpf_object__close(obj);
     return err;
 }
