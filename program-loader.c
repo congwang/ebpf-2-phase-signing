@@ -369,15 +369,8 @@ int main(int argc, char **argv)
     }
 
     // Find the specified program section
-    struct bpf_program *prog;
-    bpf_object__for_each_program(prog, obj) {
-        const char *prog_name = bpf_program__section_name(prog);
-        if (strcmp(prog_name, arguments.section_name) == 0) {
-            break;
-        }
-        prog = NULL;
-    }
-
+    struct bpf_program *prog = NULL;
+    prog = bpf_object__find_program_by_name(obj, arguments.section_name);
     if (!prog) {
         fprintf(stderr, "Failed to find program section '%s'\n", arguments.section_name);
         err = 1;
@@ -387,6 +380,12 @@ int main(int argc, char **argv)
     // Get program instructions and metadata
     const struct bpf_insn *insns = bpf_program__insns(prog);
     size_t insn_cnt = bpf_program__insn_cnt(prog);
+    if (!insns) {
+        fprintf(stderr, "Failed to get program instructions\n");
+        err = 1;
+        goto cleanup_obj;
+    }
+
     __u32 log_level = arguments.verbose ? 1 : 0;
     char log_buf[4096];
 
