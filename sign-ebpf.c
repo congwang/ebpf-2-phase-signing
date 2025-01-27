@@ -86,18 +86,30 @@ int BPF_PROG(bpf, int cmd, union bpf_attr *attr, unsigned int size)
         return -EINVAL;
 
     bpf_dynptr_from_mem(orig_data->data, orig_data->data_len, 0, &orig_data_ptr);
+    orig_data->sig_len &= MAX_SIG_SIZE - 1;  // Bound to 1024 bytes for verifier
     bpf_dynptr_from_mem(orig_data->sig, orig_data->sig_len, 0, &orig_sig_ptr);
 
     // Copy program and original signature into combined buffer
+    insn_cnt &= MAX_DATA_SIZE - 1;  // Bound to 1024 bytes for verifier
     ret = bpf_copy_from_user(combined_buf->data, insn_cnt, (void *)(unsigned long)attr->insns);
     if (ret)
         goto out;
-    ret = bpf_probe_read(&combined_buf->data[insn_cnt], orig_data->sig_len, orig_data->sig);
+
+    // Ensure we stay within buffer bounds
+    if (insn_cnt >= MAX_DATA_SIZE || orig_data->sig_len >= MAX_SIG_SIZE)
+        goto out;
+
+    ret = bpf_probe_read_kernel(combined_buf->data + insn_cnt,
+                               MAX_SIG_SIZE,
+                               orig_data->sig);
     if (ret)
         goto out;
 
-    bpf_dynptr_from_mem(combined_buf->data, insn_cnt + orig_data->sig_len, 0, &combined_data_ptr);
-    bpf_dynptr_from_mem(mod_sig->sig, mod_sig->sig_len, 0, &sig_ptr);
+    // Bound total size for verifier
+    __u32 total_size = (insn_cnt + orig_data->sig_len) & (MAX_DATA_SIZE + MAX_SIG_SIZE - 1);
+    bpf_dynptr_from_mem(combined_buf->data, total_size, 0, &combined_data_ptr);
+    __u32 mod_sig_size = mod_sig->sig_len & (MAX_SIG_SIZE - 1);
+    bpf_dynptr_from_mem(mod_sig->sig, mod_sig_size, 0, &sig_ptr);
 
     if (user_keyring_serial)
         trusted_keyring = bpf_lookup_user_key(user_keyring_serial, 0);
