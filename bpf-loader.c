@@ -84,6 +84,7 @@ int main(int argc, char **argv)
         .verbose = 0,
         .object_file = "sign-ebpf.o"
     };
+    struct bpf_link *link = NULL;
     struct bpf_object *obj;
     int err;
 
@@ -150,6 +151,26 @@ int main(int argc, char **argv)
     if (arguments.verbose)
         printf("Map 'modified_signature' pinned at %s\n", PIN_BASEDIR "/modified_signature");
 
+    // Find and attach the LSM program
+    struct bpf_program *prog;
+
+    prog = bpf_object__find_program_by_name(obj, "bpf");
+    if (!prog) {
+        fprintf(stderr, "Failed to find BPF program 'bpf'\n");
+        err = -ENOENT;
+        goto cleanup;
+    }
+
+    link = bpf_program__attach_lsm(prog);
+    if (libbpf_get_error(link)) {
+        fprintf(stderr, "Failed to attach LSM program: %ld\n", libbpf_get_error(link));
+        err = -EINVAL;
+        goto cleanup;
+    }
+
+    if (arguments.verbose)
+        printf("LSM program attached successfully\n");
+
     // Set up signal handler
     signal(SIGINT, sig_handler);
     signal(SIGTERM, sig_handler);
@@ -163,6 +184,8 @@ int main(int argc, char **argv)
     printf("\nCleaning up...\n");
 
 cleanup:
+    if (link)
+        bpf_link__destroy(link);
     // Unpin maps
     if (obj) {
         struct bpf_map *map;
