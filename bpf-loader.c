@@ -19,11 +19,13 @@ static char args_doc[] = "";
 
 static struct argp_option options[] = {
     {"verbose", 'v', 0, 0, "Produce verbose output"},
+    {"object", 'o', "FILE", OPTION_ARG_OPTIONAL, "BPF object file (default: sign-ebpf.o)"},
     {0}
 };
 
 struct arguments {
     int verbose;
+    const char *object_file;
 };
 
 static error_t parse_opt(int key, char *arg, struct argp_state *state) {
@@ -33,9 +35,11 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
     case 'v':
         arguments->verbose = 1;
         break;
-    case ARGP_KEY_ARG:
-        argp_usage(state);
+    case 'o':
+        arguments->object_file = arg ? arg : "sign-ebpf.o";
         break;
+    case ARGP_KEY_ARG:
+        return 0;
     default:
         return ARGP_ERR_UNKNOWN;
     }
@@ -68,7 +72,10 @@ static int ensure_pin_dir(void)
 
 int main(int argc, char **argv)
 {
-    struct arguments arguments = {0};
+    struct arguments arguments = {
+        .verbose = 0,
+        .object_file = "sign-ebpf.o"
+    };
     struct bpf_object *obj;
     int err;
 
@@ -84,7 +91,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    obj = bpf_object__open("sign_ebpf.o");
+    obj = bpf_object__open(arguments.object_file);
     if (libbpf_get_error(obj)) {
         fprintf(stderr, "Failed to open BPF object\n");
         return 1;
