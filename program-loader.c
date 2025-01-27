@@ -34,7 +34,7 @@ struct modified_sig {
 
 const char *argp_program_version = "program-loader 1.0";
 static char doc[] = "Load program and signatures for two-phase verification";
-static char args_doc[] = "ORIGINAL_PROGRAM ORIGINAL_SIGNATURE PRIVATE_KEY CERT SECTION_NAME";
+static char args_doc[] = "ORIGINAL_PROGRAM PRIVATE_KEY CERT SECTION_NAME";
 
 static struct argp_option options[] = {
     {"verbose", 'v', 0, 0, "Produce verbose output"},
@@ -43,7 +43,6 @@ static struct argp_option options[] = {
 
 struct arguments {
     char *orig_prog_path;
-    char *orig_sig_path;
     char *private_key_path;
     char *cert_path;
     char *section_name;
@@ -63,15 +62,12 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
             arguments->orig_prog_path = arg;
             break;
         case 1:
-            arguments->orig_sig_path = arg;
-            break;
-        case 2:
             arguments->private_key_path = arg;
             break;
-        case 3:
+        case 2:
             arguments->cert_path = arg;
             break;
-        case 4:
+        case 3:
             arguments->section_name = arg;
             break;
         default:
@@ -79,7 +75,7 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
         }
         break;
     case ARGP_KEY_END:
-        if (state->arg_num < 5)
+        if (state->arg_num < 4)
             argp_usage(state);
         break;
     default:
@@ -103,6 +99,68 @@ static void print_openssl_error(void)
     unsigned long err = ERR_get_error();
     ERR_error_string_n(err, err_buf, sizeof(err_buf));
     fprintf(stderr, "OpenSSL error: %s\n", err_buf);
+}
+
+// Compute original signature using PKCS#7
+static int compute_original_signature(const void *prog_data, size_t prog_len,
+                                   EVP_PKEY *pkey, X509 *cert,
+                                   unsigned char *sig_buf, unsigned int *sig_len)
+{
+    PKCS7 *p7 = NULL;
+    BIO *bio = NULL;
+    BIO *data_bio = NULL;
+    int ret = -1;
+    unsigned char *temp_buf = NULL;
+
+    // Create BIO for the data to be signed
+    data_bio = BIO_new(BIO_s_mem());
+    if (!data_bio) {
+        print_openssl_error();
+        goto cleanup;
+    }
+
+    // Write program data to BIO
+    if (BIO_write(data_bio, prog_data, prog_len) != prog_len) {
+        print_openssl_error();
+        goto cleanup;
+    }
+
+    // Create PKCS7 signature
+    p7 = PKCS7_sign(cert, pkey, NULL, data_bio, PKCS7_BINARY | PKCS7_DETACHED);
+    if (!p7) {
+        print_openssl_error();
+        goto cleanup;
+    }
+
+    // Get DER encoded signature
+    bio = BIO_new(BIO_s_mem());
+    if (!bio) {
+        print_openssl_error();
+        goto cleanup;
+    }
+
+    if (!i2d_PKCS7_bio(bio, p7)) {
+        print_openssl_error();
+        goto cleanup;
+    }
+
+    *sig_len = BIO_get_mem_data(bio, &temp_buf);
+    if (*sig_len > MAX_SIG_SIZE) {
+        fprintf(stderr, "Signature too large: %u > %d\n", *sig_len, MAX_SIG_SIZE);
+        goto cleanup;
+    }
+
+    memcpy(sig_buf, temp_buf, *sig_len);
+    ret = 0;
+
+cleanup:
+    if (bio)
+        BIO_free(bio);
+    if (data_bio)
+        BIO_free(data_bio);
+    if (p7)
+        PKCS7_free(p7);
+    return ret;
 }
 
 // Compute modified signature using PKCS#7
@@ -219,18 +277,53 @@ int main(int argc, char **argv)
     int err = 0;
     int zero = 0;
     struct bpf_object_open_opts open_opts = {};
+    EVP_PKEY *pkey = NULL;
+    X509 *cert = NULL;
+    FILE *key_file = NULL, *cert_file = NULL;
 
     argp_parse(&argp, argc, argv, 0, 0, &arguments);
 
     // Set up libbpf logging callback
     libbpf_set_print(libbpf_print_fn);
 
-    // Open input files
-    int orig_prog_fd = open(arguments.orig_prog_path, O_RDONLY);
-    int orig_sig_fd = open(arguments.orig_sig_path, O_RDONLY);
+    // Initialize OpenSSL
+    OpenSSL_add_all_algorithms();
+    ERR_load_crypto_strings();
 
-    if (orig_prog_fd < 0 || orig_sig_fd < 0) {
-        fprintf(stderr, "Failed to open input files\n");
+    // Read private key
+    key_file = fopen(arguments.private_key_path, "r");
+    if (!key_file) {
+        fprintf(stderr, "Failed to open private key file: %s\n", strerror(errno));
+        err = 1;
+        goto cleanup_openssl;
+    }
+
+    pkey = PEM_read_PrivateKey(key_file, NULL, NULL, NULL);
+    if (!pkey) {
+        print_openssl_error();
+        err = 1;
+        goto cleanup_files;
+    }
+
+    // Read certificate
+    cert_file = fopen(arguments.cert_path, "r");
+    if (!cert_file) {
+        fprintf(stderr, "Failed to open certificate file: %s\n", strerror(errno));
+        err = 1;
+        goto cleanup_files;
+    }
+
+    cert = PEM_read_X509(cert_file, NULL, NULL, NULL);
+    if (!cert) {
+        print_openssl_error();
+        err = 1;
+        goto cleanup_files;
+    }
+
+    // Open input file
+    int orig_prog_fd = open(arguments.orig_prog_path, O_RDONLY);
+    if (orig_prog_fd < 0) {
+        fprintf(stderr, "Failed to open input file\n");
         err = 1;
         goto cleanup_files;
     }
@@ -241,14 +334,15 @@ int main(int argc, char **argv)
     if (orig_data.data_len <= 0) {
         fprintf(stderr, "Failed to read program data or empty program\n");
         err = 1;
-        goto cleanup_files;
+        goto cleanup_prog;
     }
 
-    orig_data.sig_len = read(orig_sig_fd, orig_data.sig, MAX_SIG_SIZE);
-    if (orig_data.sig_len <= 0) {
-        fprintf(stderr, "Failed to read original signature or empty signature\n");
+    // Compute original signature from raw program data
+    if (compute_original_signature(orig_data.data, orig_data.data_len,
+                                 pkey, cert, orig_data.sig, &orig_data.sig_len) != 0) {
+        fprintf(stderr, "Failed to compute original signature\n");
         err = 1;
-        goto cleanup_files;
+        goto cleanup_prog;
     }
 
     // Open pinned maps
@@ -262,7 +356,7 @@ int main(int argc, char **argv)
     if (orig_map_fd < 0 || sig_map_fd < 0) {
         fprintf(stderr, "Failed to open pinned maps. Make sure bpf-loader was run first.\n");
         err = 1;
-        goto cleanup_files;
+        goto cleanup_prog;
     }
 
     // Load and verify the eBPF program
@@ -346,9 +440,19 @@ cleanup_obj:
 cleanup_maps:
     close(orig_map_fd);
     close(sig_map_fd);
-cleanup_files:
+cleanup_prog:
     if (orig_prog_fd >= 0) close(orig_prog_fd);
-    if (orig_sig_fd >= 0) close(orig_sig_fd);
-
+cleanup_files:
+    if (key_file)
+        fclose(key_file);
+    if (cert_file)
+        fclose(cert_file);
+cleanup_openssl:
+    if (cert)
+        X509_free(cert);
+    if (pkey)
+        EVP_PKEY_free(pkey);
+    EVP_cleanup();
+    ERR_free_strings();
     return err;
 }
