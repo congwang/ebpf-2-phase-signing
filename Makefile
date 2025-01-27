@@ -20,7 +20,7 @@ bpf-loader: bpf-loader.c
 	$(CC) $(CFLAGS) $< -o $@ -lbpf
 
 program-loader: program-loader.c
-	$(CC) $(CFLAGS) $< -o $@ -lbpf
+	$(CC) -Wall -o $@ $< -lbpf -lelf -lz -lcrypto
 
 .PHONY: clean
 clean:
