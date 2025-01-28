@@ -17,7 +17,7 @@
 #include <openssl/x509.h>
 
 #define MAX_DATA_SIZE (1024 * 1024)
-#define MAX_SIG_SIZE 1024
+#define MAX_SIG_SIZE 4096
 #define PIN_BASEDIR "/sys/fs/bpf"
 
 struct original_data {

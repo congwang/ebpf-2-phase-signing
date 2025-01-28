@@ -5,7 +5,7 @@
 #include "bpf_kfuncs.h"
 
 #define MAX_DATA_SIZE (1024 * 1024)
-#define MAX_SIG_SIZE 1024
+#define MAX_SIG_SIZE 4096
 
 __u32 user_keyring_serial;
 __u64 system_keyring_id;
