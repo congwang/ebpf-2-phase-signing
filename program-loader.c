@@ -126,7 +126,7 @@ static int compute_original_signature(const void *prog_data, size_t prog_len,
     }
 
     // Create PKCS7 signature
-    p7 = PKCS7_sign(cert, pkey, NULL, data_bio, PKCS7_BINARY | PKCS7_DETACHED);
+    p7 = PKCS7_sign(cert, pkey, NULL, data_bio, PKCS7_BINARY | PKCS7_DETACHED | PKCS7_NOSMIMECAP | PKCS7_NOCERTS | PKCS7_NOATTR);
     if (!p7) {
         print_openssl_error();
         goto cleanup;
@@ -224,7 +224,7 @@ static int compute_modified_signature(const struct bpf_insn *insns, size_t insn_
     }
 
     // Create PKCS7 signature
-    p7 = PKCS7_sign(cert, pkey, NULL, data_bio, PKCS7_BINARY | PKCS7_DETACHED);
+    p7 = PKCS7_sign(cert, pkey, NULL, data_bio, PKCS7_BINARY | PKCS7_DETACHED | PKCS7_NOSMIMECAP | PKCS7_NOCERTS | PKCS7_NOATTR);
     if (!p7) {
         print_openssl_error();
         goto cleanup;

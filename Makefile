@@ -25,6 +25,9 @@ bpf-loader: bpf-loader.c
 program-loader: program-loader.c
 	$(CC) -Wall -o $@ $< -lz -lcrypto -lbpf
 
+add_key: add_key.c
+	$(CC) $(CFLAGS) $< -o $@ -lkeyutils
+
 # OpenSSL key generation settings
 KEY_DIR := keys
 PRIVATE_KEY := $(KEY_DIR)/private.key
