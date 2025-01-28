@@ -276,7 +276,9 @@ int main(int argc, char **argv)
     struct arguments arguments = {0};
     int err = 0;
     int zero = 0;
-    struct bpf_object_open_opts open_opts = {};
+    struct bpf_object_open_opts open_opts = {
+        .sz = sizeof(struct bpf_object_open_opts),
+    };
     EVP_PKEY *pkey = NULL;
     X509 *cert = NULL;
     FILE *key_file = NULL, *cert_file = NULL;
