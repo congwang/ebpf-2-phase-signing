@@ -15,10 +15,14 @@
 #include <openssl/err.h>
 #include <openssl/pkcs7.h>
 #include <openssl/x509.h>
+#include <keyutils.h>
 
 #define MAX_DATA_SIZE (1024 * 1024)
 #define MAX_SIG_SIZE 4096
 #define PIN_BASEDIR "/sys/fs/bpf"
+
+#define USER_KEYRING_IDX 0
+#define SYSTEM_KEYRING_IDX 1
 
 struct original_data {
     __u8 data[MAX_DATA_SIZE];
@@ -361,13 +365,40 @@ int main(int argc, char **argv)
         goto cleanup_prog;
     }
 
+    // Get the keyring map
+    char keyring_map_path[PATH_MAX];
+    snprintf(keyring_map_path, sizeof(keyring_map_path), "%s/%s", PIN_BASEDIR, "keyring_map");
+    int keyring_map_fd = bpf_obj_get(keyring_map_path);
+    if (keyring_map_fd < 0) {
+        fprintf(stderr, "Failed to open keyring map. Make sure bpf-loader was run first.\n");
+        err = 1;
+        goto cleanup_prog;
+    }
+
+    // Get the keyring ID
+    key_serial_t keyring_id = request_key("keyring", "_ebpf", NULL, KEY_SPEC_SESSION_KEYRING);
+    if (keyring_id < 0) {
+        fprintf(stderr, "Failed to get _ebpf keyring: %s\n", strerror(errno));
+        err = 1;
+        goto cleanup_maps;
+    }
+
+    // Update the keyring map
+    __u32 key = USER_KEYRING_IDX;
+    __u32 value = keyring_id;
+    if (bpf_map_update_elem(keyring_map_fd, &key, &value, BPF_ANY)) {
+        fprintf(stderr, "Failed to update keyring map\n");
+        err = 1;
+        goto cleanup_maps;
+    }
+
     // Load and verify the eBPF program
     struct bpf_object *obj = NULL;
     obj = bpf_object__open_mem(orig_data.data, orig_data.data_len, &open_opts);
     if (libbpf_get_error(obj)) {
         fprintf(stderr, "Failed to open BPF object: %s\n", strerror(errno));
         err = 1;
-        goto cleanup_maps;
+        goto cleanup_obj;
     }
 
     // Find the specified program section
@@ -441,6 +472,8 @@ cleanup_obj:
 cleanup_maps:
     close(orig_map_fd);
     close(sig_map_fd);
+    if (keyring_map_fd >= 0)
+        close(keyring_map_fd);
 cleanup_prog:
     if (orig_prog_fd >= 0) close(orig_prog_fd);
 cleanup_files:

@@ -151,6 +151,24 @@ int main(int argc, char **argv)
     if (arguments.verbose)
         printf("Map 'modified_signature' pinned at %s\n", PIN_BASEDIR "/modified_signature");
 
+    // Pin keyring map
+    map = bpf_object__find_map_by_name(obj, "keyring_map");
+    if (!map) {
+        fprintf(stderr, "Failed to find map 'keyring_map'\n");
+        err = 1;
+        goto cleanup;
+    }
+
+    snprintf(pin_path, sizeof(pin_path), "%s/%s", PIN_BASEDIR, "keyring_map");
+    if (bpf_map__pin(map, pin_path)) {
+        fprintf(stderr, "Failed to pin map 'keyring_map'\n");
+        err = 1;
+        goto cleanup;
+    }
+
+    if (arguments.verbose)
+        printf("Map 'keyring_map' pinned at %s\n", PIN_BASEDIR "/keyring_map");
+
     // Find and attach the LSM program
     struct bpf_program *prog;
 
@@ -201,6 +219,13 @@ cleanup:
         if (map) {
             char pin_path[PATH_MAX];
             snprintf(pin_path, sizeof(pin_path), "%s/%s", PIN_BASEDIR, "modified_signature");
+            bpf_map__unpin(map, pin_path);
+        }
+
+        map = bpf_object__find_map_by_name(obj, "keyring_map");
+        if (map) {
+            char pin_path[PATH_MAX];
+            snprintf(pin_path, sizeof(pin_path), "%s/%s", PIN_BASEDIR, "keyring_map");
             bpf_map__unpin(map, pin_path);
         }
     }

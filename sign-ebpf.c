@@ -7,8 +7,18 @@
 #define MAX_DATA_SIZE (1024 * 1024)
 #define MAX_SIG_SIZE 4096
 
-__u32 user_keyring_serial;
-__u64 system_keyring_id;
+#define USER_KEYRING_IDX 0
+#define SYSTEM_KEYRING_IDX 1
+
+/* From include/linux/key.h */
+#define KEY_SPEC_SESSION_KEYRING -3
+
+struct {
+    __uint(type, BPF_MAP_TYPE_ARRAY);
+    __uint(max_entries, 2);
+    __type(key, __u32);
+    __type(value, __u32);
+} keyring_map SEC(".maps");
 
 struct original_data {
     __u8 data[MAX_DATA_SIZE];
@@ -110,6 +120,18 @@ int BPF_PROG(bpf, int cmd, union bpf_attr *attr, unsigned int size)
     bpf_dynptr_from_mem(combined_buf->data, total_size, 0, &combined_data_ptr);
     __u32 mod_sig_size = mod_sig->sig_len & (MAX_SIG_SIZE - 1);
     bpf_dynptr_from_mem(mod_sig->sig, mod_sig_size, 0, &sig_ptr);
+
+    __u32 user_keyring_serial = 0;
+    __u32 system_keyring_id = 0;
+    __u32 idx = USER_KEYRING_IDX;
+    __u32 *keyring_serial = bpf_map_lookup_elem(&keyring_map, &idx);
+    if (keyring_serial)
+        user_keyring_serial = *keyring_serial;
+
+    idx = SYSTEM_KEYRING_IDX;
+    __u32 *system_keyring = bpf_map_lookup_elem(&keyring_map, &idx);
+    if (system_keyring)
+        system_keyring_id = *system_keyring;
 
     if (user_keyring_serial)
         trusted_keyring = bpf_lookup_user_key(user_keyring_serial, 0);

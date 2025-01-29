@@ -23,7 +23,7 @@ bpf-loader: bpf-loader.c
 	$(CC) $(CFLAGS) $< -o $@ -lbpf
 
 program-loader: program-loader.c
-	$(CC) -Wall -o $@ $< -lz -lcrypto -lbpf
+	$(CC) -Wall -o $@ $< -lz -lcrypto -lbpf -lkeyutils
 
 add_key: add_key.c
 	$(CC) $(CFLAGS) -o $@ $< -lkeyutils
