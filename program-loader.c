@@ -411,10 +411,10 @@ int main(int argc, char **argv)
 
     // Prepare program attributes
     union bpf_attr attr = {
-        .prog_type = BPF_PROG_TYPE_LSM,
+        .prog_type = BPF_PROG_TYPE_KPROBE,
         .insns = (unsigned long)insns,
         .insn_cnt = insn_cnt,
-        .license = (unsigned long)"Dual BSD/GPL",
+        .license = (unsigned long)"GPL",
         .log_buf = (unsigned long)log_buf,
         .log_size = sizeof(log_buf),
         .log_level = log_level,

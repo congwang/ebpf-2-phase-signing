@@ -26,18 +26,21 @@ program-loader: program-loader.c
 	$(CC) -Wall -o $@ $< -lz -lcrypto -lbpf
 
 add_key: add_key.c
-	$(CC) $(CFLAGS) $< -o $@ -lkeyutils
+	$(CC) $(CFLAGS) -o $@ $< -lkeyutils
 
 # OpenSSL key generation settings
 KEY_DIR := keys
 PRIVATE_KEY := $(KEY_DIR)/private.key
 CERT := $(KEY_DIR)/cert.pem
+CERT_DER := $(KEY_DIR)/cert.der
 
 # Generate OpenSSL keys for signing
 .PHONY: keys
 keys:
 	@mkdir -p $(KEY_DIR)
-	@openssl req -x509 -newkey rsa:4096 -keyout $(PRIVATE_KEY) -out $(CERT) -days 365 -nodes -subj "/CN=Test"
+	@openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:4096 -out $(PRIVATE_KEY)
+	@openssl req -new -x509 -config bpf_cert.conf -key $(PRIVATE_KEY) -out $(CERT) -days 365
+	@openssl x509 -in $(CERT) -outform DER -out $(CERT_DER)
 	@echo "Generated keys in $(KEY_DIR) directory"
 	@echo "WARNING: Keep $(PRIVATE_KEY) private and secure!"
 
@@ -46,6 +49,6 @@ clean:
 	rm -f sign-ebpf.o bpf-loader program-loader vmlinux.h minimal-sign.bpf.o
 	rm -rf $(KEY_DIR)
 
-all: sign-ebpf.o bpf-loader program-loader minimal-sign.bpf.o
+all: bpf-loader program-loader add_key sign-ebpf.o minimal-sign.bpf.o
 
 .PHONY: clean all

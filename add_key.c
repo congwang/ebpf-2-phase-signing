@@ -49,7 +49,7 @@ int main(int argc, char *argv[]) {
     }
 
     // Add the key
-    key_serial_t key_id = add_key("asymmetric", "system:ebpf:program-signing", buffer, size, keyring_id);
+    key_serial_t key_id = add_key("asymmetric", ".ebpf:signing:x509", buffer, size, keyring_id);
     if (key_id < 0) {
         perror("add_key");
         free(buffer);
