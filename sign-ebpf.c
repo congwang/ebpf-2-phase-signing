@@ -121,11 +121,15 @@ int BPF_PROG(bpf, int cmd, union bpf_attr *attr, unsigned int size)
 
     ret = bpf_verify_pkcs7_signature(&orig_data_ptr, &orig_sig_ptr, trusted_keyring);
     if (ret) {
+        bpf_printk("Failed to verify original signature\n");
         bpf_key_put(trusted_keyring);
         goto out;
     }
 
     ret = bpf_verify_pkcs7_signature(&combined_data_ptr, &sig_ptr, trusted_keyring);
+    if (ret)
+        bpf_printk("Failed to verify combined signature\n");
+
     bpf_key_put(trusted_keyring);
 
 out:
