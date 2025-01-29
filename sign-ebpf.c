@@ -103,23 +103,34 @@ int BPF_PROG(bpf, int cmd, union bpf_attr *attr, unsigned int size)
     __u32 insn_len = insn_cnt * sizeof(struct bpf_insn);
     insn_len &= MAX_DATA_SIZE - 1;  // Bound for verifier
     ret = bpf_copy_from_user(combined_buf->data, insn_len, (void *)(unsigned long)attr->insns);
-    if (ret)
+    if (ret) {
+        bpf_printk("Failed to copy program: %d\n", ret);
         goto out;
+    }
 
     // Ensure we stay within buffer bounds
-    if (insn_len >= MAX_DATA_SIZE || orig_data->sig_len >= MAX_SIG_SIZE)
+    if (insn_len >= MAX_DATA_SIZE || orig_data->sig_len >= MAX_SIG_SIZE) {
+        bpf_printk("Insufficient buffer size\n");
+        ret = -E2BIG;
         goto out;
+    }
 
     ret = bpf_probe_read_kernel(combined_buf->data + insn_len,
                                MAX_SIG_SIZE,
                                orig_data->sig);
-    if (ret)
+    if (ret) {
+        bpf_printk("Failed to copy original signature: %d\n", ret);
         goto out;
+    }
 
     // Bound total size for verifier
     __u32 total_size = insn_len + orig_data->sig_len;
-    if (total_size > MAX_DATA_SIZE + MAX_SIG_SIZE)
+    if (total_size > MAX_DATA_SIZE + MAX_SIG_SIZE) {
+        bpf_printk("Insufficient buffer size\n");
+        ret = -E2BIG;
         goto out;
+    }
+
     bpf_dynptr_from_mem(combined_buf->data, total_size, 0, &combined_data_ptr);
     __u32 mod_sig_size = mod_sig->sig_len & (MAX_SIG_SIZE - 1);
     bpf_dynptr_from_mem(mod_sig->sig, mod_sig_size, 0, &sig_ptr);
