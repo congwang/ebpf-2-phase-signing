@@ -16,7 +16,7 @@ vmlinux.h:
 sign-ebpf.o: sign-ebpf.c vmlinux.h
 	$(CLANG) $(CFLAGS) $(BPF_CFLAGS) -c $< -o $@
 
-minimal-sign.bpf.o: minimal-sign.bpf.c vmlinux.h
+minimal.bpf.o: minimal.bpf.c vmlinux.h
 	$(CLANG) $(CFLAGS) $(BPF_CFLAGS) -c $< -o $@
 
 bpf-loader: bpf-loader.c
@@ -46,9 +46,9 @@ keys:
 
 .PHONY: clean
 clean:
-	rm -f sign-ebpf.o bpf-loader program-loader vmlinux.h minimal-sign.bpf.o
+	rm -f sign-ebpf.o bpf-loader program-loader vmlinux.h minimal.bpf.o
 	rm -rf $(KEY_DIR)
 
-all: bpf-loader program-loader add_key sign-ebpf.o minimal-sign.bpf.o
+all: bpf-loader program-loader add_key sign-ebpf.o minimal.bpf.o
 
 .PHONY: clean all
