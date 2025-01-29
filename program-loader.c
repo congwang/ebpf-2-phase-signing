@@ -365,17 +365,7 @@ int main(int argc, char **argv)
         goto cleanup_prog;
     }
 
-    // Get the keyring map
-    char keyring_map_path[PATH_MAX];
-    snprintf(keyring_map_path, sizeof(keyring_map_path), "%s/%s", PIN_BASEDIR, "keyring_map");
-    int keyring_map_fd = bpf_obj_get(keyring_map_path);
-    if (keyring_map_fd < 0) {
-        fprintf(stderr, "Failed to open keyring map. Make sure bpf-loader was run first.\n");
-        err = 1;
-        goto cleanup_prog;
-    }
-
-    // Get the keyring ID
+    // Get the _ebpf keyring first
     key_serial_t keyring_id = request_key("keyring", "_ebpf", NULL, KEY_SPEC_SESSION_KEYRING);
     if (keyring_id < 0) {
         fprintf(stderr, "Failed to get _ebpf keyring: %s\n", strerror(errno));
@@ -383,9 +373,28 @@ int main(int argc, char **argv)
         goto cleanup_maps;
     }
 
-    // Update the keyring map
+    // Get the signing key from the _ebpf keyring
+    key_serial_t key_id = request_key("asymmetric", ".ebpf:signing:x509", NULL, keyring_id);
+    if (key_id < 0) {
+        fprintf(stderr, "Failed to get signing key from keyring: %s\n", strerror(errno));
+        err = 1;
+        goto cleanup_maps;
+    }
+    printf("Found signing key with ID: %d\n", key_id);
+
+    // Get the keyring map
+    char keyring_map_path[PATH_MAX];
+    snprintf(keyring_map_path, sizeof(keyring_map_path), "%s/%s", PIN_BASEDIR, "keyring_map");
+    int keyring_map_fd = bpf_obj_get(keyring_map_path);
+    if (keyring_map_fd < 0) {
+        fprintf(stderr, "Failed to open keyring map. Make sure bpf-loader was run first.\n");
+        err = 1;
+        goto cleanup_maps;
+    }
+
+    // Update the keyring map with the keyring ID (not the key ID)
     __u32 key = USER_KEYRING_IDX;
-    __u32 value = keyring_id;
+    __u32 value = keyring_id;  // Store the keyring ID since bpf_lookup_user_key will be used on this
     if (bpf_map_update_elem(keyring_map_fd, &key, &value, BPF_ANY)) {
         fprintf(stderr, "Failed to update keyring map\n");
         err = 1;
@@ -472,8 +481,7 @@ cleanup_obj:
 cleanup_maps:
     close(orig_map_fd);
     close(sig_map_fd);
-    if (keyring_map_fd >= 0)
-        close(keyring_map_fd);
+    close(keyring_map_fd);
 cleanup_prog:
     if (orig_prog_fd >= 0) close(orig_prog_fd);
 cleanup_files:
