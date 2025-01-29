@@ -116,7 +116,9 @@ int BPF_PROG(bpf, int cmd, union bpf_attr *attr, unsigned int size)
         goto out;
 
     // Bound total size for verifier
-    __u32 total_size = (insn_cnt + orig_data->sig_len) & (MAX_DATA_SIZE + MAX_SIG_SIZE - 1);
+    __u32 total_size = insn_cnt + orig_data->sig_len;
+    if (total_size > MAX_DATA_SIZE + MAX_SIG_SIZE)
+        goto out;
     bpf_dynptr_from_mem(combined_buf->data, total_size, 0, &combined_data_ptr);
     __u32 mod_sig_size = mod_sig->sig_len & (MAX_SIG_SIZE - 1);
     bpf_dynptr_from_mem(mod_sig->sig, mod_sig_size, 0, &sig_ptr);
