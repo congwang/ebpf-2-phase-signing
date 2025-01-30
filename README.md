@@ -5,37 +5,6 @@ This project implements a two-phase signing system for eBPF programs using PKCS#
 > **⚠️ WARNING ⚠️**  
 > **This only provides a proof of concept and is NOT suitable for production use!**
 
-## Overview
-
-### Components
-
-1. **sign-ebpf.c**: The core eBPF LSM (Linux Security Module) program that verifies eBPF program signatures during loading
-2. **bpf-loader.c**: The loader for sign-ebpf.o eBPF program
-3. **program-loader.c**: User-space program that loads and signs eBPF programs
-4. **minimal.bpf.c**: A minimal sample eBPF program for testing
-
-### Technical Implementation
-
-#### Buffer Management
-
-The system uses several key buffers with strict size limits:
-- `MAX_DATA_SIZE`: 1MB (1024 * 1024 bytes) for program instructions
-- `MAX_SIG_SIZE`: 4KB (4096 bytes) for signatures
-
-Key data structures:
-```c
-struct original_data {
-    __u8 data[MAX_DATA_SIZE];    // Original program data
-    __u32 data_len;              // Length of program data
-    __u8 sig[MAX_SIG_SIZE];      // Original signature
-    __u32 sig_len;               // Length of original signature
-};
-
-struct modified_sig {
-    __u8 sig[MAX_SIG_SIZE];      // Modified signature
-    __u32 sig_len;               // Length of modified signature
-};
-```
 
 ## Background and Design
 
@@ -103,6 +72,15 @@ When loading an eBPF program, the kernel performs verification in sequence:
    - Each phase builds upon the previous one
    - Creates a verifiable link between original and modified code
    - Prevents signature stripping attacks
+
+## Overview
+
+### Components
+
+1. **sign-ebpf.c**: The core eBPF LSM (Linux Security Module) program that verifies eBPF program signatures during loading
+2. **bpf-loader.c**: The loader for sign-ebpf.o eBPF program
+3. **program-loader.c**: User-space program that loads and signs eBPF programs
+4. **minimal.bpf.c**: A minimal sample eBPF program for testing
 
 ## How It Works
 
