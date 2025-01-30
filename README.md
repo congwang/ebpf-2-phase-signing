@@ -78,8 +78,8 @@ make all
 
 This will generate:
 - `sign-ebpf.o`: The compiled eBPF LSM program
-- `bpf-loader`: The helper program for loading `sign-ebpf.o` eBPF programs
-- `program-loader`: The user-space loader program
+- `bpf-loader`: The helper program for loading the `sign-ebpf.o` eBPF program
+- `program-loader`: The user-space loader program for signing and loading eBPF programs
 - `minimal.bpf.o`: The minimal sample eBPF program for testing
 - `add_key`: A helper program for adding keys to the keyring
 
