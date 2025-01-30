@@ -1,6 +1,6 @@
 # eBPF Two-Phase Signing System
 
-This project implements a two-phase signing system for eBPF programs using PKCS#7 signatures. The system provides enhanced security by requiring two separate signatures: an original signature for the program itself, and a 2nd signature that covers both the program and its original signature.
+This project implements a two-phase signing system for eBPF programs using PKCS#7 signatures. The system provides enhanced security by requiring two separate signatures: a 1st signature for the original program itself, and a 2nd signature that covers both the modified program and its original signature.
 
 > **⚠️ WARNING ⚠️**  
 > **This only provides a proof of concept and is NOT suitable for production use!**
@@ -119,7 +119,8 @@ sudo ./program-loader minimal.bpf.o keys/private.key keys/cert.pem minimal_prog
 
 ### 5. Verify Operation
 
-Check the kernel logs to see the verification results:
+You should see the verification result from the output of the program loader.
+If any failure, check the kernel logs to see the verification results:
 
 ```bash
 sudo cat /sys/kernel/debug/tracing/trace_pipe
