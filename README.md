@@ -37,19 +37,94 @@ struct modified_sig {
 };
 ```
 
-### How It Works
+## Background and Design
+
+### The Challenge with eBPF Program Signing
+
+Traditional code signing approaches don't work well with eBPF programs due to their unique loading process. Here's why:
+
+1. **Post-Compilation Modifications**:
+   - When you compile an eBPF program, the resulting binary isn't in its final form
+   - The libbpf library must modify this binary before it can run in the kernel
+   - These modifications include:
+     - Patching relocations
+     - Updating map file descriptors
+     - Other runtime adjustments
+
+2. **Traditional Signing Problem**:
+   - If you simply signed the original binary
+   - The signature would become invalid after libbpf's necessary modifications
+   - This makes traditional single-signature approaches ineffective
+
+### Two-Phase Signing Solution
+
+This project introduces a two-phase signing approach that mirrors the eBPF program preparation and loading process:
+
+#### Phase 1: Baseline Signature
+- Generated when the eBPF program is initially compiled
+- Signs the original, unmodified program
+- Serves as proof that the original program came from a trusted source
+- Similar to getting a document notarized before filling in the blanks
+
+#### Phase 2: Modified Program Signature
+- Takes place after libbpf has made its necessary modifications
+- Creates a signature covering:
+  - The modified program
+  - The original signature from Phase 1
+- Establishes a chain of trust
+- Proves modifications were authorized and applied to legitimate code
+
+### Verification Process
+
+When loading an eBPF program, the kernel performs verification in sequence:
+
+1. **Original Program Verification**:
+   - Verifies the original program against its baseline signature
+   - Establishes that we started with trusted code
+
+2. **Modified Program Verification**:
+   - Verifies the secondary signature
+   - Confirms that modifications were authorized
+   - Ensures no unauthorized tampering occurred
+
+### Benefits of This Approach
+
+1. **Practical Security**:
+   - Maintains security while accommodating necessary program modifications
+   - Similar to legal documents with initial notarization and subsequent verification
+
+2. **Strong Auditability**:
+   - If verification fails, you can pinpoint the exact stage of failure
+   - Helps distinguish between:
+     - Compromised original program
+     - Unauthorized post-compilation modifications
+
+3. **Chain of Trust**:
+   - Each phase builds upon the previous one
+   - Creates a verifiable link between original and modified code
+   - Prevents signature stripping attacks
+
+## How It Works
+
+The implementation follows the two-phase signing process:
+
 1. **1st Signature Generation**:
-   - The original program instructions stored in the eBPF program are signed using PKCS#7
+   - The original eBPF program binary is signed using PKCS#7
+   - This happens before any libbpf modifications
+   - Establishes the program's original trusted state
 
 2. **2nd Signature Generation**:
-   - Combines modified program instructions (e.g. by libbpf) and original signature
-   - Sign the combined data using PKCS#7
+   - After libbpf processes the program (relocations, map FDs, etc.)
+   - The modified program and original signature are combined
+   - This combined data is signed with PKCS#7
+   - Proves the modifications were authorized
 
-3. **Verification Process**:
+3. **Runtime Verification**:
    - Uses BPF LSM hooks to intercept eBPF program loading
-   - Verifies the 1st signature against original eBPF program data
-   - Verifies the 2nd signature against combined data
-   - Only if both verifications pass will the program be loaded
+   - First the kernel verifies the original signature against the unmodified program data
+   - Then the kernel verifies the second signature against the combined data
+   - Program loading proceeds only if both verifications succeed
+   - Failures provide detailed diagnostics about which phase failed
 
 ## Prerequisites
 
