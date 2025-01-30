@@ -58,17 +58,23 @@ When loading an eBPF program, the kernel performs verification in sequence:
 
 ### Benefits of This Approach
 
-1. **Practical Security**:
+1. **No Kernel Changes Required**:
+   - Built entirely on top of existing eBPF infrastructure
+   - Leverages standard BPF LSM hooks for verification
+   - Works with existing kernel security mechanisms
+   - No need to modify core kernel code
+
+2. **Practical Security**:
    - Maintains security while accommodating necessary program modifications
    - Similar to legal documents with initial notarization and subsequent verification
 
-2. **Strong Auditability**:
+3. **Strong Auditability**:
    - If verification fails, you can pinpoint the exact stage of failure
    - Helps distinguish between:
      - Compromised original program
      - Unauthorized post-compilation modifications
 
-3. **Chain of Trust**:
+4. **Chain of Trust**:
    - Each phase builds upon the previous one
    - Creates a verifiable link between original and modified code
    - Prevents signature stripping attacks
