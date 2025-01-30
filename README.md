@@ -35,6 +35,7 @@ struct modified_sig {
     __u8 sig[MAX_SIG_SIZE];      // Modified signature
     __u32 sig_len;               // Length of modified signature
 };
+```
 
 ### How It Works
 1. **1st Signature Generation**:
